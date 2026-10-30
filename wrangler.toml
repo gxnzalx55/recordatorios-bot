@@ -1,0 +1,29 @@
+name = "recordatorios-bot"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+# Revisa los avisos cada minuto
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+TIMEZONE = "Europe/Madrid"
+# Hora a la que suenan los recordatorios de día completo (y "posponer a mañana")
+ALL_DAY_HOUR = "9"
+# Duración de los eventos con hora que crea el bot (minutos)
+EVENT_DURATION_MIN = "30"
+CLAUDE_MODEL = "claude-haiku-5-5"
+# Cuánto "piensa" el modelo; déjalo vacío ("") para usar el valor por defecto
+CLAUDE_EFFORT = "low"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "recordatorios"
+database_id = "PEGA_AQUI_EL_ID_DE_D1"
+
+[observability]
+enabled = true
+
+# Secretos (se configuran con `npx wrangler secret put NOMBRE`, nunca aquí):
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, ALLOWED_CHAT_ID,
+#   CALENDAR_ID, GOOGLE_SERVICE_ACCOUNT, ANTHROPIC_API_KEY
