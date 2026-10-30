@@ -30,7 +30,7 @@ const SA = { client_email: 'bot@proyecto.iam.gserviceaccount.com', private_key: 
 function makeEnv() {
   return {
     DB: fakeD1(), TIMEZONE: 'Europe/Madrid', ALL_DAY_HOUR: '9', EVENT_DURATION_MIN: '30',
-    CLAUDE_MODEL: 'claude-haiku-5-5', CLAUDE_EFFORT: 'low',
+    AI_PROVIDER: 'anthropic', CLAUDE_MODEL: 'claude-haiku-5-5', CLAUDE_EFFORT: 'low',
     TELEGRAM_BOT_TOKEN: 'T', TELEGRAM_WEBHOOK_SECRET: 'S', ALLOWED_CHAT_ID: '42',
     CALENDAR_ID: 'cal@group.calendar.google.com', GOOGLE_SERVICE_ACCOUNT: JSON.stringify(SA), ANTHROPIC_API_KEY: 'K',
   };
@@ -208,6 +208,44 @@ test('flujo completo: crear, avisar, hecho y posponer', async () => {
 
     await sendUpdate(env, msg('/semana'));
     assert.match(fakes.sent.at(-1).text, /Todo el día — Cumple de Ana/);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('Workers AI: interpreta, tolera campos ausentes y sobrevive a errores', async () => {
+  const fakes = installFakes();
+  const calls = [];
+  let reply = { response: { action: 'create', title: 'Llamar al dentista', date: '2026-10-31', time: '09:00', alerts_minutes: [60] } };
+  const env = {
+    ...makeEnv(), AI_PROVIDER: 'workers-ai', ANTHROPIC_API_KEY: '',
+    AI: { run: async (model, input) => { calls.push({ model, input }); if (reply instanceof Error) throw reply; return reply; } },
+  };
+  mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-10-30T00:10:00Z') });
+  try {
+    await sendUpdate(env, msg('mañana a las 9 llamar al dentista, avísame una hora antes'));
+    assert.equal(calls[0].model, '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+    assert.equal(calls[0].input.response_format.type, 'json_schema');
+    assert.match(calls[0].input.messages[0].content, /Hoy es 2026-10-30/);
+    assert.match(calls[0].input.messages[0].content, /"date":"2026-10-31"/); // ejemplo con la fecha de mañana
+    assert.equal(fakes.claudeBodies.length, 0); // no llama a Anthropic
+    assert.match(fakes.sent.at(-1).text, /Llamar al dentista[\s\S]*1 hora antes, a la hora/);
+
+    // Respuesta como texto con JSON dentro
+    reply = { response: 'Aquí tienes: {"action":"list","list_days":7}' };
+    await sendUpdate(env, msg('qué tengo esta semana'));
+    assert.match(fakes.sent.at(-1).text, /Nada en los próximos 7 días/);
+
+    // Error del modelo (p. ej. "JSON Mode couldn't be met")
+    reply = new Error("JSON Mode couldn't be met");
+    await sendUpdate(env, msg('algo raro'));
+    assert.match(fakes.sent.at(-1).text, /No he podido interpretarlo/);
+
+    // Sin binding de IA: avisa y sugiere /nuevo
+    await sendUpdate(env, msg('hola'));
+    const noAi = { ...env, AI: undefined };
+    await sendUpdate(noAi, msg('mañana dentista'));
+    assert.match(fakes.sent.at(-1).text, /no está activado/);
   } finally {
     mock.timers.reset();
   }

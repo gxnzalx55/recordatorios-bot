@@ -5,7 +5,7 @@ import { dueAlerts, eventMoment, isDone } from './alerts.js';
 import { createEvent, getEvent, listEvents, markDone } from './google.js';
 import { addSnooze, claimAlert, claimSnooze, cleanupSent, deleteDraft, dueSnoozes, getDraft, releaseAlert, saveDraft } from './db.js';
 import { answerCallback, editMessage, escapeHtml, sendMessage, typing } from './telegram.js';
-import { interpretWithClaude, normalizeDraft, parseFixed } from './parser.js';
+import { aiProvider, interpret, normalizeDraft, parseFixed } from './parser.js';
 
 const ALERT_WINDOW_MS = 15 * MIN; // si una ejecución se pierde, los avisos se recuperan hasta 15 min tarde
 
@@ -140,13 +140,19 @@ async function handleMessage(env, msg) {
       if (cmd) return sendMessage(env, chatId, 'No conozco ese comando. Escribe /ayuda.');
   }
 
-  if (!env.ANTHROPIC_API_KEY) {
+  if (!aiProvider(env)) {
     return sendMessage(env, chatId, 'El modo de lenguaje natural no está activado. Usa el formato rápido:\n<code>/nuevo 15/11 10:00 -1s Pagar el seguro</code>');
   }
 
   await typing(env, chatId);
   const draft = await getDraft(env, chatId);
-  const r = await interpretWithClaude(env, text, Date.now(), draft);
+  let r;
+  try {
+    r = await interpret(env, text, Date.now(), draft);
+  } catch (err) {
+    console.error('Fallo de la IA', err);
+    return sendMessage(env, chatId, '🤔 No he podido interpretarlo. Prueba a escribirlo de otra forma, o usa el formato rápido:\n<code>/nuevo 15/11 10:00 -1d Pagar el seguro</code>');
+  }
   switch (r.action) {
     case 'create':
       return proposeDraft(env, chatId, { title: r.title, date: r.date, time: r.time || null, alerts: r.alerts_minutes });

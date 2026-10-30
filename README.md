@@ -14,11 +14,11 @@ Bot:  🔔 Pagar el seguro
       [✅ Hecho] [⏰ 1 h] [⏰ Mañana]
 ```
 
-**Cómo funciona:** un Cloudflare Worker (gratis) recibe tus mensajes, usa Claude Haiku para entenderlos, crea el evento en Google Calendar y cada minuto revisa qué avisos tocan. El estado mínimo (avisos ya enviados, borradores, pospuestos) vive en una base de datos D1, también gratuita.
+**Cómo funciona:** un Cloudflare Worker (gratis) recibe tus mensajes, usa la IA de Cloudflare (Workers AI, también gratis) para entenderlos, crea el evento en Google Calendar y cada minuto revisa qué avisos tocan. El estado mínimo (avisos ya enviados, borradores, pospuestos) vive en una base de datos D1, también gratuita.
 
 El bot se ejecuta entero en Cloudflare: una vez montado, tu ordenador puede estar apagado.
 
-**Coste:** 0 €/mes de infraestructura. La IA es opcional y cuesta unos 0,0003 $ por mensaje interpretado: con 5 recordatorios al día, menos de 0,10 $ al mes. Sin clave de Anthropic funciona el formato rápido `/nuevo`.
+**Coste:** 0 €. Todo cabe en planes gratuitos, IA incluida: Workers AI da 10.000 «neuronas» al día, suficiente para más de 100 mensajes diarios. Si prefieres Claude Haiku (entiende mejor el español coloquial), cuesta unos 0,0003 $ por mensaje: menos de 0,10 $ al mes con 5 recordatorios al día.
 
 ---
 
@@ -63,11 +63,11 @@ Dentro, `/app` es tu carpeta: lo que cambies se guarda en tu disco. Con Docker, 
 
 **2.5 Copia el ID del calendario.** En esa misma página, sección *Integrar el calendario* → **ID de calendario** (algo como `abc123...@group.calendar.google.com`).
 
-### 3. Clave de Anthropic (opcional, para el lenguaje natural)
+### 3. IA para entender el texto libre
 
-En [console.anthropic.com](https://console.anthropic.com) crea una API key y recarga saldo (funciona con prepago; la recarga mínima te dura años con uso personal). Fija también un **límite de gasto mensual** bajo, por ejemplo 1 $, para no llevarte sorpresas.
+**Por defecto no tienes que hacer nada:** el bot usa Workers AI (Llama 3.3 70B), que viene con tu cuenta de Cloudflare y no necesita clave.
 
-Puedes saltarte este paso y añadir la clave más adelante con `npx wrangler secret put ANTHROPIC_API_KEY`.
+**Opcional, Claude Haiku:** entiende mejor fechas coloquiales («el finde», «pasado mañana por la tarde»). En [console.anthropic.com](https://console.anthropic.com) crea una API key, recarga saldo (prepago; la recarga mínima dura años con uso personal) y fija un **límite de gasto mensual** bajo, por ejemplo 1 $. Después, en el paso 4, guarda la clave con `npx wrangler secret put ANTHROPIC_API_KEY` y cambia en `wrangler.toml` `AI_PROVIDER = "anthropic"`.
 
 ### 4. Despliega en Cloudflare
 
@@ -124,7 +124,7 @@ node -e "console.log(crypto.randomUUID())"
 npx wrangler secret put TELEGRAM_BOT_TOKEN        # el token de BotFather
 npx wrangler secret put TELEGRAM_WEBHOOK_SECRET   # el que acabas de generar
 npx wrangler secret put CALENDAR_ID               # el ID del paso 2.5
-npx wrangler secret put ANTHROPIC_API_KEY         # opcional
+npx wrangler secret put ANTHROPIC_API_KEY         # solo si usas Claude (paso 3)
 ```
 
 La clave de Google se carga directamente desde el archivo, sin pegar nada:
@@ -179,7 +179,7 @@ Listo: puedes cerrar la terminal, Docker y el calendario. El bot sigue funcionan
 
 | Escribes | Qué pasa |
 |---|---|
-| Texto libre (*«mañana a las 9 llamar al dentista, avísame 1 hora antes»*) | Te propone el recordatorio; confirmas con ✅ (necesita la clave de Anthropic) |
+| Texto libre (*«mañana a las 9 llamar al dentista, avísame 1 hora antes»*) | Te propone el recordatorio; confirmas con ✅ |
 | Una corrección mientras hay un borrador (*«mejor a las 10»*) | Actualiza el borrador |
 | *«¿qué tengo esta semana?»*, `/semana`, `/hoy` | Lista tus recordatorios |
 | `/nuevo 15/11 10:00 -1s -1d Pagar el seguro` | Formato rápido sin IA. Fechas: `dd/mm`, `dd/mm/aaaa`, `hoy`, `mañana`. Avisos: `-30m`, `-2h`, `-1d`, `-1s`. Sin hora = día completo |
@@ -187,7 +187,7 @@ Listo: puedes cerrar la terminal, Docker y el calendario. El bot sigue funcionan
 
 En cada aviso: **✅ Hecho** (marca el evento con ✅ y deja de avisar), **⏰ 1 h** y **⏰ Mañana** (te lo vuelve a recordar; no mueve el evento).
 
-Solo gastan IA los mensajes de texto libre. Los avisos, los botones, `/hoy`, `/semana` y `/nuevo` son gratis.
+Solo usan IA los mensajes de texto libre; los avisos, los botones, `/hoy`, `/semana` y `/nuevo` no. Si la IA interpreta mal algo, lo verás en el resumen antes de guardar: escribe la corrección o usa `/nuevo`.
 
 **Detalles útiles:**
 - Los recordatorios de **día completo** suenan a las 09:00 (configurable con `ALL_DAY_HOUR` en `wrangler.toml`). En ellos solo caben avisos de días o semanas antes.
@@ -219,20 +219,22 @@ Solo necesitas abrir la terminal (o el contenedor) para cambiar algo:
 | `/health` dice «Calendario no encontrado» | El `CALENDAR_ID` está mal o no compartiste el calendario con la cuenta de servicio (paso 2.4). |
 | `/health` dice `Google token 400` o «no es un JSON válido» | El secreto `GOOGLE_SERVICE_ACCOUNT` no es el JSON completo. Vuelve a cargarlo desde el archivo. |
 | El bot no contesta | Repite el paso 5 y revisa `npm run logs`. Si no configuraste `ALLOWED_CHAT_ID`, solo responde con tu chat ID. |
-| Texto libre: «El modo de lenguaje natural no está activado» | Falta `ANTHROPIC_API_KEY`. Mientras tanto, usa `/nuevo`. |
+| Texto libre: «El modo de lenguaje natural no está activado» | Falta el bloque `[ai]` en `wrangler.toml`, o pusiste `AI_PROVIDER = "anthropic"` sin el secreto `ANTHROPIC_API_KEY`. `/health` muestra qué IA está activa. |
+| Texto libre: «No he podido interpretarlo» a menudo | El modelo gratuito a veces no devuelve el formato esperado. `npm run logs` muestra el error. Reescribe el mensaje, usa `/nuevo` o cambia a Claude (paso 3). |
+| `deploy` da un error de permisos tras añadir la IA | Al token de Cloudflare le falta Workers AI: edítalo y añade *Account · Workers AI · Read* y *Edit*. |
 | «Claude 400» al escribir texto libre | Prueba a dejar `CLAUDE_EFFORT = ""` en `wrangler.toml` y vuelve a desplegar. Mientras tanto, `/nuevo` sigue funcionando. |
 | Un aviso no llegó | Si Cloudflare se salta ejecuciones, el bot recupera avisos con hasta 15 minutos de retraso; más allá se pierden. |
 
 ## Límites del plan gratuito
 
-Con un uso personal quedas muy por debajo de todos: el Worker hace ~1.500 ejecuciones al día (límite 100.000), una consulta a Google por minuto, y unas pocas escrituras en D1 por aviso. Solo usa 1 de las 5 tareas programadas gratuitas de tu cuenta de Cloudflare.
+Con un uso personal quedas muy por debajo de todos: el Worker hace ~1.500 ejecuciones al día (límite 100.000), una consulta a Google por minuto, unas pocas escrituras en D1 por aviso y del orden de 80 neuronas de Workers AI por mensaje de texto libre (límite 10.000 al día). Solo usa 1 de las 5 tareas programadas gratuitas de tu cuenta de Cloudflare.
 
 ## Estructura
 
 ```
 src/index.js     Entrada del Worker: webhook, /setup, /health y tarea cada minuto
 src/bot.js       Lógica del bot: mensajes, botones, listados y envío de avisos
-src/parser.js    Formato rápido /nuevo y lenguaje natural con Claude
+src/parser.js    Formato rápido /nuevo y lenguaje natural (Workers AI o Claude)
 src/alerts.js    Cálculo de cuándo toca cada aviso
 src/google.js    Google Calendar con cuenta de servicio (JWT con WebCrypto)
 src/telegram.js  Cliente mínimo de Telegram

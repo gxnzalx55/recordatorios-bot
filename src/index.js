@@ -2,6 +2,7 @@
 
 import { handleUpdate, runAlerts } from './bot.js';
 import { listEvents } from './google.js';
+import { aiProvider } from './parser.js';
 import { tg } from './telegram.js';
 
 const json = (data, status = 200) =>
@@ -53,7 +54,7 @@ export default {
       const checks = {
         telegram_token: !!env.TELEGRAM_BOT_TOKEN,
         allowed_chat_id: !!env.ALLOWED_CHAT_ID,
-        anthropic_key: !!env.ANTHROPIC_API_KEY,
+        ia: aiProvider(env) || 'desactivada',
         calendar_id: !!env.CALENDAR_ID,
       };
       try {

@@ -12,9 +12,17 @@ TIMEZONE = "Europe/Madrid"
 ALL_DAY_HOUR = "9"
 # Duración de los eventos con hora que crea el bot (minutos)
 EVENT_DURATION_MIN = "30"
+# IA para entender texto libre: "workers-ai" (gratis, incluida en Cloudflare)
+# o "anthropic" (Claude Haiku; necesita el secreto ANTHROPIC_API_KEY)
+AI_PROVIDER = "workers-ai"
+WORKERS_AI_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 CLAUDE_MODEL = "claude-haiku-5-5"
-# Cuánto "piensa" el modelo; déjalo vacío ("") para usar el valor por defecto
+# Cuánto "piensa" Claude; déjalo vacío ("") para usar el valor por defecto
 CLAUDE_EFFORT = "low"
+
+# Workers AI (plan gratuito: 10.000 neuronas al día)
+[ai]
+binding = "AI"
 
 [[d1_databases]]
 binding = "DB"
