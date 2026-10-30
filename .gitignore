@@ -1,5 +1,4 @@
 node_modules/
 .wrangler/
 .dev.vars
-clave.json
 *.json.key
